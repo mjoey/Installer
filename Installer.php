@@ -508,20 +508,26 @@ HELP;
             } while (empty($entity));
         } else {
             $entity = array_shift($params);
+            $moduleName = array_shift($params); //Check modulename if you use entity from another extension
         }
 
         // Check entity exists
-        $this->_processResources(array());
+        if(!$moduleName) $this->_processResources(array());
 
         $config = $this->getConfig();
         if (!isset($config->global)) {
             $config->addChild('global');
         }
-        $resourceModel = $config->global->models->{strtolower($this->getModuleName())}->resourceModel;
-        $entities = $config->global->models->{$resourceModel}->entities;
-        if (!$entities->{strtolower($entity)}) {
-            $this->_processEntity(array($entity));
-        }
+        
+        //Create entity
+        if(!$moduleName)
+        {
+			$resourceModel = $config->global->models->{strtolower($this->getModuleName())}->resourceModel;
+			$entities = $config->global->models->{$resourceModel}->entities;
+			if (!$entities->{strtolower($entity)}) {
+				$this->_processEntity(array($entity));
+			}
+		}
         unset($config);
 
         // Create directories :)
@@ -560,12 +566,20 @@ HELP;
 
         // Create grid
         $filename = $dir . '/Grid.php';
-
+        
+        //Define resource model collection
+		if($moduleName)
+		{
+			$resourceModelCollection = strtolower($moduleName) . '/' . strtolower($entity) . '_collection';
+		}else{
+			$resourceModelCollection = strtolower($this->getModuleName()) . '/' . strtolower($entity) . '_collection';
+		}
+		
         if (!is_file($filename)) {
             file_put_contents($filename, $this->getTemplate('grid_block', array(
                 '{Entity}' => end($names),
                 '{Name}' => implode('_', $names) . '_Grid',
-                '{resource_model_collection}' => strtolower($this->getModuleName()) . '/' . strtolower($entity) . '_collection',
+                '{resource_model_collection}' => $resourceModelCollection,
                 '{Collection_Model}' => $this->getModuleName() . '_Model_Mysql4_' . implode('_', $entityTab) . '_Collection'
              )));
         }
@@ -579,7 +593,8 @@ HELP;
         ));
 
         // Grid controller..
-        $this->_processController(array('adminhtml_' . $entity, '-'), compact('methods'));
+        //To authorize custom admin url and use adminhtml router we concat module name and entity name to define controller name
+        $this->_processController(array('adminhtml_' . strtolower($this->_module . $entity) , '-'), compact('methods'));
 
         // Helper data
         $this->_processHelper(array('data', '-'));
@@ -1024,7 +1039,8 @@ HELP;
             $where .= 'end';
         }
 
-        if (empty($params)) {
+		//We define frontname only for front router
+        if (empty($params) && $where == 'front') {
             do {
                 $frontName = $this->prompt('Front name?');
             } while (empty($frontName));
@@ -1045,14 +1061,15 @@ HELP;
         }
 
         // Module
-        $routerName = strtolower($this->getModuleName()) . ($where == 'admin' ? '_adminhtml' : '');
+        //If is admin router we use adminhtml router
+        $routerName = ($where == 'admin') ? 'adminhtml' : strtolower($this->getModuleName());
         if (!$moduleRoute = $routers->{$routerName}) {
             $moduleRoute = $routers->addChild($routerName);
         }
 
         // Use
         if (!$moduleRoute->use) {
-            $moduleRoute->addChild('use', ($where == 'frontend') ? 'standard' : 'admin');
+           ($where == 'frontend') ? $moduleRoute->addChild('use','standard'):'';
         }
 
         // Args
@@ -1062,12 +1079,22 @@ HELP;
 
         // module
         if (!$args->module) {
-            $args->addChild('module', $this->getModuleName() . ($where == 'admin' ? '_Adminhtml' : ''));
+            ($where == 'frontend') ? $args->addChild('module', $this->getModuleName()):'';
+        }
+        
+        //modules
+        //We add the modules node for admin router as if we rewrite a controller
+        if (!$args->modules) {
+            if($where == 'admin')
+            {
+				$modules = $args->addChild('modules');
+				$modules->addChild(strtolower($this->getModuleName()),$this->getModuleName().'_Adminhtml')->addAttribute('after','Mage_Adminhtml');
+			}
         }
 
         // frontName
         if (!$args->frontName) {
-            $args->addChild('frontName', $frontName);
+            ($where == 'frontend') ? $args->addChild('frontName', $frontName) : '';
         }
 
         $this->writeConfig();
