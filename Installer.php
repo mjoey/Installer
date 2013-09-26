@@ -154,7 +154,7 @@ class Installer
  | layouts              | ls                    |                                           |
  | resources            | res                   |                                           |
  | entity               | ent                   | name table                                |
- | grid                 |                       | entity                                    |
+ | grid                 |                       | entity modulename                         |
  | form                 |                       | entity                                    |
  |----------------------|-----------------------|-------------------------------------------|
  | COMMAND              | ALIAS                 | PARAMETERS                                |
