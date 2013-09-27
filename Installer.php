@@ -1609,7 +1609,7 @@ HELP;
     protected function _processSetupSql(array $params)
     {
         list($dir, $created) = $this->getModuleDir('sql', true);
-
+		
         $config = $this->getConfig();
         if (!isset($config->global)) {
             $config->addChild('global');
@@ -1625,7 +1625,7 @@ HELP;
 
             $setup = $moduleSetup->addChild('setup');
             $setup->addChild('module', $this->getModuleName());
-            $setup->addChild('class', 'Mage_Core_Model_Resource_Setup');
+            $setup->addChild('class', 'Mage_Catalog_Model_Resource_Eav_Mysql4_Setup');
             $connection = $moduleSetup->addChild('connection');
             $connection->addChild('use', 'core_setup');
             $this->writeConfig();
