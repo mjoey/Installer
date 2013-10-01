@@ -594,7 +594,7 @@ HELP;
 
         // Grid controller..
         //To authorize custom admin url and use adminhtml router we concat module name and entity name to define controller name
-        $this->_processController(array('adminhtml_' . strtolower($this->_module . $entity) , '-'), compact('methods'));
+        $this->_processController(array('adminhtml_' . strtolower($this->_module) .'_'. strtolower($entity) , '-'), compact('methods'));
 
         // Helper data
         $this->_processHelper(array('data', '-'));
