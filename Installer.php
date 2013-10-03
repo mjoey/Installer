@@ -2785,6 +2785,8 @@ try {
 
 } catch (Exception $e) {
     // Silence is golden
+    //But not here }:)
+    die($e->getMessage());
 }
 
 END setup_class
