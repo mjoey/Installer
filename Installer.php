@@ -153,6 +153,12 @@ class Installer
         $this->_init($argv);
         $this->_start();
     }
+    
+    public function dumpAndDie($var)
+    {
+		$this->prompt(var_dump($var));
+		die();
+	}
 
     /**
      * Is the operating system unix?
@@ -440,6 +446,10 @@ HELP;
             case 'form':
                 $this->_processModule();
                 $this->_processForm($params);
+                break;
+            case 'tab':
+                $this->_processModule();
+                $this->_processTab($params);
                 break;
             case 'tmp':
                 $this->_processTmp($params);
@@ -736,6 +746,163 @@ HELP;
         // Router
         $this->_processRouter(array('admin'));
     }
+
+	protected function _processTab(array $params)
+    {
+        // Check entity
+        if (empty($params)) {
+            do {
+                $entity = $this->prompt('Which entity?');
+            } while (empty($entity));
+        } else {
+            $entity = array_shift($params);
+        }
+        
+        // Check entity exists
+        $this->_processResources(array());
+
+        $config = $this->getConfig();
+        if (!isset($config->global)) {
+            $config->addChild('global');
+        }
+        $resourceModel = $config->global->models->{strtolower($this->getModuleName())}->resourceModel;
+        $entities = $config->global->models->{$resourceModel}->entities;
+        if (!$entities->{strtolower($entity)}) {
+            $this->_processEntity(array($entity));
+        }
+        unset($config);
+        
+        // Check Tab
+        if (empty($params)) {
+            do {
+                $tab = $this->prompt('Tab Name?');
+            } while (empty($tab));
+        } else {
+            $tab = array_shift($params);
+        }
+        
+        // Create directories :)
+        $names = $entityTab = array_map('ucfirst', explode('_', $entity));
+        
+        array_unshift($names, 'Adminhtml');
+        array_push($names, 'Edit');
+        array_push($names, 'Tab');
+
+        list($dir, $created) = $this->getModuleDir('Block', true);
+
+        if ($created) {
+            $config = $this->getConfig();
+            $global = $config->global;
+            if (!isset($global['blocks'])) {
+                $global->addChild('blocks')->addChild(strtolower($this->getModuleName()))->addChild('class', $this->getModuleName() . '_Block');
+            }
+            $this->writeConfig();
+        }
+
+        foreach ($names as $rep) {
+            $dir .= $rep . '/';
+            if (!is_dir($dir)) {
+                mkdir($dir);
+            }
+        }
+
+		// Create tab
+        $filename = $dir . '/'.ucfirst($tab).'.php';
+		
+        if (!is_file($filename)) {
+            file_put_contents($filename, $this->getTemplate('tab_block', array(
+                '{Tab_Name}' => ucfirst($tab),
+                '{tab_name}' => strtolower($tab),
+                '{Entity}' => end($entityTab),
+                '{entity}' => strtolower(end($entityTab)),
+                '{Name}' => implode('_', $names) . '_'.$tab,
+                '{current}' => strtolower(end($entityTab)),
+                '{id_field}' => strtolower(end($entityTab)) . '_id',
+                '{Entity_Name}' => $this->getModuleName() . '_Model_' . implode('_', $entityTab),
+             )));
+        }
+
+        // Create tabs container
+        array_pop($names);
+        $filename = $dir . '../Tabs.php';
+		
+        if (!is_file($filename)) {
+            file_put_contents($filename, $this->getTemplate('tabs_container_block', array(
+				'{Tab_Name}' => ucfirst($tab),
+                '{tab_name}' => strtolower($tab),
+                '{Entity}' => end($entityTab),
+                '{entity}' => strtolower(end($entityTab)),
+                '{current}' => strtolower(end($entityTab)),
+                '{Name}' => implode('_', $names).'_Tabs',
+                '{blockGroup}' => strtolower($this->getModuleName()),
+                '{controller}' => 'adminhtml_' . strtolower($entity),
+                '{entity_mage_identifier}' => strtolower($this->getModuleName() . '/' . implode('_', $entityTab)),
+                '{Entity_Name}' => $this->getModuleName() . '_Model_' . implode('_', $entityTab),
+            )));
+        }
+		
+        // Create edit block
+        array_pop($names);
+        $filename = $dir . '../../Edit.php';
+		
+        if (!is_file($filename)) {
+            file_put_contents($filename, $this->getTemplate('edit_block', array(
+                '{Entity}' => end($entityTab),
+                '{entity}' => strtolower(end($entityTab)),
+                '{Name}' => implode('_', $names) . '_Edit',
+                '{current}' => strtolower(end($entityTab)),
+                '{id_field}' => strtolower(end($entityTab)) . '_id',
+                '{Entity_Name}' => $this->getModuleName() . '_Model_' . implode('_', $entityTab),
+             )));
+        }
+
+        // Methods
+        $methods = $this->getTemplate('tabs_controller_methods', array(
+            '{Entity}' => end($entityTab),
+            '{entity}' => strtolower(end($entityTab)),
+            '{current}' => strtolower(end($entityTab)),
+            '{form_name}' => strtolower(implode('_', $names)),
+            '{entity_mage_identifier}' => strtolower($this->getModuleName() . '/' . implode('_', $entityTab)),
+        ));
+
+        // Grid controller..
+        $this->_processController(array('adminhtml_' . strtolower($this->_module) .'_'. strtolower($entity) , '-'), compact('methods'));
+
+        // Helper data
+        $this->_processHelper(array('data', '-'));
+
+        // Router
+        $this->_processRouter(array('admin'));
+        
+        // Layout
+        $this->_processLayout(array('admin',strtolower(end($entityTab))));
+        
+        //Template
+        $this->_processTemplateTabs(array('Edit',$names,'phtml_tabs',strtolower(end($entityTab))));
+    }
+    
+    protected function _processTemplateTabs(array $params)
+    {
+		$dir = $this->getDesignDir('adminhtml', 'template');
+            $dirs = array(strtolower($this->getModuleName()));
+            $name = $params[0];
+            $names = $params[1];
+            foreach ($dirs as $rep) {
+                $dir .= strtolower($rep) . '/';
+                if (!is_dir($dir)) {
+                    mkdir($dir);
+                }
+            }
+            $phtmlFilepath = strtolower(implode('/', $dirs) . '/' . $name . '.phtml');
+            $phtmlFilename = $dir . strtolower($name) . '.phtml';
+            if (!is_file($phtmlFilename)) {
+                file_put_contents($phtmlFilename, $this->getTemplate($params[2], array(
+					'{Name}' => implode('_', $names) . (empty($names) ? '' : '_') . ucfirst($name),
+					'{Entity}' => ucfirst($params[3]),
+					'{entity}' => strtolower($params[3])
+					)));
+            }
+	}
 
     protected function _processGeneral(array $params)
     {
@@ -1706,7 +1873,7 @@ HELP;
                 }
             } while (!in_array($where, array('admin', 'front')));
         }
-
+		
         if ($where == 'admin') {
             $where = 'adminhtml';
         } else {
@@ -1750,9 +1917,21 @@ HELP;
                 }
             }
 
-            if (!file_exists($dir . 'layout/' . $file)) {
-                file_put_contents($dir . 'layout/' . $file, $this->getTemplate('layout_xml'));
-            }
+			if($where == 'frontend')
+			{
+				if (!file_exists($dir . 'layout/' . $file)) {
+					file_put_contents($dir . 'layout/' . $file, $this->getTemplate('layout_xml'));
+				}
+			}else{
+				if (!file_exists($dir . 'layout/' . $file)) {
+					$entity = array_pop($params);
+					file_put_contents($dir . 'layout/' . $file, $this->getTemplate('admin_layout_xml',array(
+						'{entity}' => $entity,
+						'{module_name}' => strtolower($this->getModuleName()),
+						'{handle}' => array_pop(explode('_',strtolower($this->getModuleName()))).'_'.$entity
+					)));
+				}
+			}
         }
 
         $this->_processReloadConfig();
@@ -2974,6 +3153,25 @@ BEGIN adminhtml_xml
 </config>
 END adminhtml_xml
 
+BEGIN admin_layout_xml
+<_?xml version="1.0" encoding="utf-8" ?>
+<!--
+{COPYRIGHT}
+-->
+<layout version="0.1.0">
+	<adminhtml_{handle}_edit>
+		<update handle="editor"/>
+		<reference name="content">
+			<block type="{module_name}/adminhtml_{entity}_edit" name="{entity}_edit"></block>
+		</reference>
+		<reference name="left">
+			<block type="adminhtml/store_switcher" name="store_switcher" before="-"></block>
+			<block type="{module_name}/adminhtml_{entity}_edit_tabs" name="{entity}_tabs"></block>
+        </reference>
+	</adminhtml_{handle}_edit>
+</layout>
+END admin_layout_xml
+
 BEGIN layout_xml
 <_?xml version="1.0" encoding="utf-8" ?>
 <!--
@@ -3173,6 +3371,297 @@ class {Module_Name}_Block_{Name} extends Mage_Adminhtml_Block_Widget_Form_Contai
 }
 END form_container_block
 
+BEGIN tabs_container_block
+<_?php
+{COPYRIGHT}
+
+/**
+ * {Entity} Tabs Container
+ * @package {Module_Name}
+ */
+class {Module_Name}_Block_{Name} extends Mage_Adminhtml_Block_Widget_Tabs
+{
+	
+// {COMPANY_NAME} Tag NEW_CONST
+
+// {COMPANY_NAME} Tag NEW_VAR
+
+    /**
+     * Main Constructor
+     * @access public
+     * @retun void
+     */
+    public function __construct()
+    {
+        parent::__construct();
+        $this->setId('{entity}_info_tabs');
+        $this->setDestElementId('{entity}_edit_form');
+        $this->setTitle(Mage::helper('{module_name}')->__('{Entity} Information'));
+    }
+    
+    protected function _prepareLayout()
+    {
+        $this->addTab('{tab_name}', array(
+                        'label'     => Mage::helper('{module_name}')->__('{Tab_Name}'),
+                        'content'   => $this->_translateHtml($this->getLayout()
+                                        ->createBlock('{module_name}/adminhtml_{entity}_edit_tab_{tab_name}')->toHtml()),
+        ));
+    }
+    
+    /**
+     * Translate html content
+     *
+     * @param string $html
+     * @return string
+     */
+    protected function _translateHtml($html)
+    {
+        Mage::getSingleton('core/translate_inline')->processResponseBody($html);
+        return $html;
+    }
+
+}
+END tabs_container_block
+
+BEGIN tab_block
+<_?php
+{COPYRIGHT}
+
+/**
+ * {Entity} Tab
+ * @package {Module_Name}
+ */
+class {Module_Name}_Block_{Name} extends Mage_Adminhtml_Block_Widget_Form
+{
+
+// {COMPANY_NAME} Tag NEW_CONST
+
+// {COMPANY_NAME} Tag NEW_VAR
+
+     /**
+     * Main Constructor
+     * @access public
+     * @return void
+     */
+    public function __construct()
+    {
+        return parent::_construct();
+    }
+    
+    protected function _prepareLayout()
+    {
+        return parent::_prepareLayout();
+    }
+    
+    protected function _prepareForm()
+    {
+        ${entity} = Mage::registry('current_{current}');
+        
+        $form = new Varien_Data_Form();
+        $fieldset = $form->addFieldset('{tab_name}', array('legend'=>Mage::helper('{module_name}')->__('{Tab_Name}')));
+        
+        $fieldset->addField('name', 'text', array(
+                        'name' => 'name',
+                        'label' => Mage::helper('{module_name}')->__('Name'),
+                        'required'=> true,
+                        'value'=> ${entity}->getName()
+        ));
+        
+        $this->setForm($form);
+    }
+
+// {COMPANY_NAME} Tag NEW_METHOD
+
+}
+END tab_block
+
+BEGIN edit_block
+<_?php
+{COPYRIGHT}
+
+/**
+ * {Entity} Edit
+ * @package {Module_Name}
+ */
+class {Module_Name}_Block_{Name} extends Mage_Adminhtml_Block_Template
+{
+
+// {COMPANY_NAME} Tag NEW_CONST
+
+// {COMPANY_NAME} Tag NEW_VAR
+
+    /**
+     * Main Constructor
+     * @access public
+     * @return void
+     */
+    public function __construct()
+    {
+        parent::__construct();
+        $this->setTemplate('{module_name}/edit.phtml');
+        $this->setId('{entity}_edit');
+        
+    }
+    
+    /**
+     * Retrieve currently edited {entity} object
+     *
+     * @return Mage_Core_Model_Abstract
+     */
+    public function get{Entity}()
+    {
+        return Mage::registry('current_{current}');
+    }
+    
+    public function get{Entity}Id()
+    {
+        return $this->get{Entity}()->get{Entity}Id();
+    }
+    
+    
+
+    protected function _prepareLayout()
+    {
+        $this->setChild('back_button',
+                $this->getLayout()->createBlock('adminhtml/widget_button')
+                    ->setData(array(
+                        'label'     => Mage::helper('{module_name}')->__('Back'),
+                        'onclick'   => 'setLocation(\''.$this->getUrl('*/*/', array('store'=>$this->getRequest()->getParam('store', 0))).'\')',
+                        'class' => 'back'
+                    ))
+            );
+        
+        $this->setChild('save_button',
+                        $this->getLayout()->createBlock('adminhtml/widget_button')
+                        ->setData(array(
+                                        'label'     => Mage::helper('{module_name}')->__('Save'),
+                                        'onclick'   => '{entity}Form.submit()',
+                                        'class' => 'save'
+                        ))
+        );
+        
+        $this->setChild('delete_button',
+                $this->getLayout()->createBlock('adminhtml/widget_button')
+                        ->setData(array(
+                            'label'     => Mage::helper('{module_name}')->__('Delete'),
+                            'onclick'   => 'confirmSetLocation(\''.Mage::helper('{module_name}')->__('Are you sure?').'\', \''.$this->getDeleteUrl().'\')',
+                            'class'  => 'delete'
+                        ))
+         );
+        
+        $this->setChild('save_and_edit_button',
+                        $this->getLayout()->createBlock('adminhtml/widget_button')
+                        ->setData(array(
+                                        'label'     => Mage::helper('{module_name}')->__('Save and Continue Edit'),
+                                        'onclick'   => 'saveAndContinueEdit(\''.$this->getSaveAndContinueUrl().'\')',
+                                        'class' => 'save'
+                        ))
+        );
+        
+        return parent::_prepareLayout();
+    }
+    
+    public function getBackButtonHtml()
+    {
+        return $this->getChildHtml('back_button');
+    }
+    
+    public function getSaveButtonHtml()
+    {
+        return $this->getChildHtml('save_button');
+    }
+    
+    public function getSaveAndEditButtonHtml()
+    {
+        return $this->getChildHtml('save_and_edit_button');
+    }
+    
+    public function getDeleteButtonHtml()
+    {
+        return $this->getChildHtml('delete_button');
+    }
+    
+    public function getDeleteUrl()
+    {
+        return $this->getUrl('*/*/delete', array('_current'=>true));
+    }
+    
+    public function getSaveUrl()
+    {
+        return $this->getUrl('*/*/save', array('_current'=>true, 'back'=>null));
+    }
+    
+    public function getSaveAndContinueUrl()
+    {
+        return $this->getUrl('*/*/save', array(
+                        '_current'   => true,
+                        'back'       => 'edit',
+        ));
+    }
+    
+    /**
+     * The header
+     * @access public
+     * @return string
+     */
+    public function getHeader()
+    {
+        if ($this->get{Entity}()->getId()) {
+                $header = 'Edit {Entity}: ' . $this->get{Entity}()->getName();
+        } else {
+                $header = 'New {Entity}';
+        }
+        return $this->__($header);
+    }
+    
+    /**
+     * Retrieve the product
+     * @access protected
+     * @return Mage_Core_Model_Abstract
+     */
+    protected function _getObject()
+    {
+        return Mage::registry('current_{current}');
+    }
+
+// {COMPANY_NAME} Tag NEW_METHOD
+
+}
+END edit_block
+
+BEGIN phtml_tabs
+<_?php
+{COPYRIGHT}
+/* @var $this {Module_Name}_Block_{Name} */
+?>
+<div class="content-header">
+    <h3 class="icon-head head-{entity}"><?php echo $this->getHeader() ?></h3>
+    <p class="content-buttons form-buttons"><?php echo $this->getBackButtonHtml() ?>
+    <?php if($this->get{Entity}Id()): ?>
+        <?php echo $this->getDeleteButtonHtml() ?>
+        <?php echo $this->getSaveAndEditButtonHtml() ?>
+        <?php endif; ?>
+        <?php echo $this->getSaveButtonHtml() ?>
+    </p>
+</div>
+
+<form action="<?php echo $this->getSaveUrl() ?>" method="post" id="{entity}_edit_form" enctype="multipart/form-data">
+        <?php echo $this->getBlockHtml('formkey')?>
+        <div style="display:none"></div>
+</form>
+
+
+<script type="text/javascript">
+//<![CDATA[
+    var {entity}Form = new varienForm('{entity}_edit_form', '<?php echo $this->getValidationUrl() ?>');
+    function saveAndContinueEdit(url) {
+        
+       {entity}Form.submit(url);
+    }
+//]]>
+</script>
+END phtml_tabs
+
 BEGIN form_block
 <_?php
 {COPYRIGHT}
@@ -3317,6 +3806,158 @@ BEGIN grid_controller_methods
     }
 
 END grid_controller_methods
+
+BEGIN tabs_controller_methods
+	/**
+	 * Initialize {entity} from request parameters
+	 *
+	 * @return 
+	 */
+     protected function _init{Entity}()
+     {
+		${entity}Id  = (int) $this->getRequest()->getParam('id');
+        ${entity}    = Mage::getModel('{module_name}/{entity}')->load(${entity}Id);
+
+        Mage::register('current_{current}', ${entity});
+                
+        return ${entity};
+      }
+        
+    /**
+     * Pre dispatch
+     * @access public
+     * @return void
+     */
+    public function preDispatch()
+    {
+        // Title
+        $this->_title($this->__('Manage {Entity}'));
+
+        return parent::preDispatch();
+    }
+
+    /**
+     * List
+     * @access void
+     * @return void
+     */
+    public function indexAction()
+    {
+        $this->_forward('grid');
+    }
+
+    /**
+     * Grid
+     * @access public
+     * @return void
+     */
+    public function gridAction()
+    {
+        // Layout
+        $this->loadLayout();
+                
+        $this->_setActiveMenu('{entity}/manage');
+        
+        // Title
+        $this->_title($this->__('Grid'));
+
+        // Content
+        $grid = $this->getLayout()->createBlock('{module_name}/adminhtml_{entity}', 'grid');
+        $this->_addContent($grid);
+
+        // Render
+        $this->renderLayout();
+    }
+
+    /**
+     * New {entity}
+     * @access public
+     * @return void
+     */
+    public function newAction()
+    {
+        $this->_forward('edit');
+    }
+    
+    /**
+     * {Entity} edit form
+     */
+    public function editAction()
+    {
+        ${entity} = $this->_init{Entity}();
+                
+        // Layout
+        $this->loadLayout();
+        
+        // Title
+        if (${entity}->getId()) {
+                $this->_title($this->__('Edit {Entity}:').${entity}->getName());
+        } else {
+                $this->_title($this->__('New {Entity}'));
+        }
+                
+        // Render
+        $this->renderLayout();
+    }
+    
+    /**
+     * Save {entity}
+     * @access public
+     * @return void
+     */
+    public function saveAction()
+    {
+        // Object
+        $id     = $this->getRequest()->getParam('id', false);
+        $object = Mage::getModel('{entity_mage_identifier}')->load($id);
+
+        // Save it
+        try {
+            $object->addData($this->getRequest()->getPost());
+            $object->save();
+        } catch (Mage_Core_Exception $e) {
+            $this->_getSession()->addError($this->__('An error occurred.'));
+            $this->_redirectReferer();
+            return;
+        }
+
+        // Success
+        $this->_getSession()->addSuccess($this->__('{Entity} saved successfully.'));
+        $this->_redirect('*/*/index');
+    }
+
+    /**
+     * Delete {entity}
+     * @access public
+     * @return void
+     */
+    public function deleteAction()
+    {
+        // Object
+        $id     = $this->getRequest()->getParam('id', false);
+        $object = Mage::getModel('{entity_mage_identifier}')->load($id);
+
+        // No object?
+        if (!$object->getId()) {
+            $this->_getSession()->addError($this->__('{Entity} not found.'));
+            $this->_redirectReferer();
+            return;
+        }
+
+        // Delete it
+        try {
+            $object->delete();
+        } catch (Mage_Core_Exception $e) {
+            $this->_getSession()->addError($this->__('An error occurred.'));
+            $this->_redirectReferer();
+            return;
+        }
+
+        // Success
+        $this->_getSession()->addSuccess($this->__('{Entity} deleted successfully.'));
+        $this->_redirect('*/*/index');
+    }
+END tabs_controller_methods
 
 BEGIN form_controller_methods
     /**
