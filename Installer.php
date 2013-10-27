@@ -615,6 +615,7 @@ HELP;
         if (!is_file($filename)) {
             file_put_contents($filename, $this->getTemplate('grid_container_block', array(
                 '{Entity}' => end($names),
+                '{entity}' => strtolower(end($names)),
                 '{Name}' => implode('_', $names),
                 '{blockGroup}' => strtolower($this->getModuleName()),
                 '{controller}' => 'adminhtml_' . strtolower($entity)
@@ -634,7 +635,13 @@ HELP;
         }
 
         // Methods
-        $methods = $this->getTemplate('grid_controller_methods', array(
+        $methods = $this->getTemplate('predispatch_controller_admin_method', array(
+            '{Entity}' => end($names),
+        ));
+        
+        $methods .= $this->getTemplate('index_controller_admin_method', array());
+        
+        $methods .= $this->getTemplate('grid_controller_admin_method', array(
             '{Entity}' => end($names),
             '{entity}' => strtolower(end($names)),
             '{name}' => strtolower(implode('_', $names)),
@@ -728,12 +735,31 @@ HELP;
              )));
         }
 
-        // Methods
-        $methods = $this->getTemplate('form_controller_methods', array(
+		// Methods
+        $methods = $this->getTemplate('new_controller_admin_method', array(
+            '{entity}' => strtolower(end($entityTab)),
+        ));
+        
+        $methods = $this->getTemplate('init_controller_admin_method', array(
             '{Entity}' => end($entityTab),
             '{entity}' => strtolower(end($entityTab)),
             '{current}' => strtolower(end($entityTab)),
-            '{form_name}' => strtolower(implode('_', $names)),
+        ));
+        
+        $methods .= $this->getTemplate('edit_controller_admin_method', array(
+            '{Entity}' => end($entityTab),
+            '{entity}' => strtolower(end($entityTab)),
+        ));
+        
+        $methods .= $this->getTemplate('save_controller_admin_method', array(
+            '{Entity}' => end($entityTab),
+            '{entity}' => strtolower(end($entityTab)),
+            '{entity_mage_identifier}' => strtolower($this->getModuleName() . '/' . implode('_', $entityTab)),
+        ));
+        
+        $methods .= $this->getTemplate('delete_controller_admin_method', array(
+            '{Entity}' => end($entityTab),
+            '{entity}' => strtolower(end($entityTab)),
             '{entity_mage_identifier}' => strtolower($this->getModuleName() . '/' . implode('_', $entityTab)),
         ));
 
@@ -839,7 +865,48 @@ HELP;
                 '{entity_mage_identifier}' => strtolower($this->getModuleName() . '/' . implode('_', $entityTab)),
                 '{Entity_Name}' => $this->getModuleName() . '_Model_' . implode('_', $entityTab),
             )));
-        }
+            
+			// Methods        
+			$methods = $this->getTemplate('new_controller_admin_method', array(
+				'{entity}' => strtolower(end($entityTab)),
+			));
+			
+			$methods .= $this->getTemplate('init_controller_admin_method', array(
+				'{Entity}' => end($entityTab),
+				'{entity}' => strtolower(end($entityTab)),
+				'{current}' => strtolower(end($entityTab)),
+			));
+			
+			$methods .= $this->getTemplate('edit_controller_admin_method', array(
+				'{Entity}' => end($entityTab),
+				'{entity}' => strtolower(end($entityTab)),
+			));
+			
+			$methods .= $this->getTemplate('save_controller_admin_method', array(
+				'{Entity}' => end($entityTab),
+				'{entity}' => strtolower(end($entityTab)),
+				'{entity_mage_identifier}' => strtolower($this->getModuleName() . '/' . implode('_', $entityTab)),
+			));
+			
+			$methods .= $this->getTemplate('delete_controller_admin_method', array(
+				'{Entity}' => end($entityTab),
+				'{entity}' => strtolower(end($entityTab)),
+				'{entity_mage_identifier}' => strtolower($this->getModuleName() . '/' . implode('_', $entityTab)),
+			));
+
+            
+        }else{
+			$content = file_get_contents($filename);
+			$tag = $this->getTag('new_tab');
+			$content = str_replace($tag, 
+			$this->getTemplate('add_tab',array(
+				'{Tab_Name}' => ucfirst($tab),
+				'{tab_name}' => strtolower($tab),
+				'{entity}' => strtolower(end($entityTab)),
+			))
+			 . "\n$tag", $content);
+			 file_put_contents($filename, $content);
+		}
 		
         // Create edit block
         array_pop($names);
@@ -855,15 +922,6 @@ HELP;
                 '{Entity_Name}' => $this->getModuleName() . '_Model_' . implode('_', $entityTab),
              )));
         }
-
-        // Methods
-        $methods = $this->getTemplate('tabs_controller_methods', array(
-            '{Entity}' => end($entityTab),
-            '{entity}' => strtolower(end($entityTab)),
-            '{current}' => strtolower(end($entityTab)),
-            '{form_name}' => strtolower(implode('_', $names)),
-            '{entity_mage_identifier}' => strtolower($this->getModuleName() . '/' . implode('_', $entityTab)),
-        ));
 
         // Grid controller..
         $this->_processController(array('adminhtml_' . strtolower($this->_module) .'_'. strtolower($entity) , '-'), compact('methods'));
@@ -3257,7 +3315,7 @@ class {Module_Name}_Block_{Name} extends Mage_Adminhtml_Block_Widget_Grid_Contai
         //$this->_removeButton('add');
         return parent::_prepareLayout();
     }
-
+    
 // {COMPANY_NAME} Tag NEW_METHOD
 
 }
@@ -3300,7 +3358,23 @@ class {Module_Name}_Block_{Name} extends Mage_Adminhtml_Block_Widget_Grid
      */
     protected function _prepareColumns()
     {
-        return parent::_prepareColumns();
+		        
+        $this->addColumn('{entity}_id',
+                        array(
+                                        'header'=> Mage::helper('{module_name}')->__('ID'),
+                                        'width' => '50px',
+                                        'type'  => 'number',
+                                        'index' => '{entity}_id',
+                        ));
+         
+        $this->addColumn('name',
+                        array(
+                                        'header'=> Mage::helper('{module_name}')->__('Name'),
+                                        'index' => 'name',
+                        ));
+                        
+		return parent::_prepareColumns();
+		
     }
 
 // {COMPANY_NAME} Tag NEW_METHOD
@@ -3406,6 +3480,9 @@ class {Module_Name}_Block_{Name} extends Mage_Adminhtml_Block_Widget_Tabs
                         'content'   => $this->_translateHtml($this->getLayout()
                                         ->createBlock('{module_name}/adminhtml_{entity}_edit_tab_{tab_name}')->toHtml()),
         ));
+        
+        // {COMPANY_NAME} Tag NEW_TAB
+        
     }
     
     /**
@@ -3422,6 +3499,14 @@ class {Module_Name}_Block_{Name} extends Mage_Adminhtml_Block_Widget_Tabs
 
 }
 END tabs_container_block
+
+BEGIN add_tab
+$this->addTab('{tab_name}', array(
+                        'label'     => Mage::helper('{module_name}')->__('{Tab_Name}'),
+                        'content'   => $this->_translateHtml($this->getLayout()
+                                        ->createBlock('{module_name}/adminhtml_{entity}_edit_tab_{tab_name}')->toHtml()),
+        ));
+END add_tab
 
 BEGIN tab_block
 <_?php
@@ -3760,6 +3845,186 @@ Enter the module description here ;).
 
 END doc_readme
 
+BEGIN init_controller_admin_method
+	
+	/**
+	 * Initialize {entity} from request parameters
+	 *
+	 * @return 
+	 */
+     protected function _init{Entity}()
+     {
+		${entity}Id  = (int) $this->getRequest()->getParam('id');
+        ${entity}    = Mage::getModel('{module_name}/{entity}')->load(${entity}Id);
+
+        Mage::register('current_{current}', ${entity});
+                
+        return ${entity};
+      }
+      
+END init_controller_admin_method
+
+BEGIN predispatch_controller_admin_method
+	
+	/**
+     * Pre dispatch
+     * @access public
+     * @return void
+     */
+    public function preDispatch()
+    {
+        // Title
+        $this->_title($this->__('Manage {Entity}'));
+
+        return parent::preDispatch();
+    }
+    
+END predispatch_controller_admin_method
+
+BEGIN index_controller_admin_method
+	
+	/**
+     * List
+     * @access void
+     * @return void
+     */
+    public function indexAction()
+    {
+        $this->_forward('grid');
+    }
+    
+END index_controller_admin_method
+
+BEGIN grid_controller_admin_method
+	
+	/**
+     * Grid
+     * @access public
+     * @return void
+     */
+    public function gridAction()
+    {
+        // Layout
+        $this->loadLayout();
+
+        // Title
+        $this->_title($this->__('Grid'));
+
+        // Content
+        $grid = $this->getLayout()->createBlock('{module_name}/{name}', 'grid');
+        $this->_addContent($grid);
+
+        // Render
+        $this->renderLayout();
+    }
+    
+END grid_controller_admin_method
+
+BEGIN edit_controller_admin_method
+	
+	/**
+     * {Entity} edit form
+     */
+    public function editAction()
+    {
+        ${entity} = $this->_init{Entity}();
+                
+        // Layout
+        $this->loadLayout();
+        
+        // Title
+        if (${entity}->getId()) {
+                $this->_title($this->__('Edit {Entity}:').${entity}->getName());
+        } else {
+                $this->_title($this->__('New {Entity}'));
+        }
+                
+        // Render
+        $this->renderLayout();
+    }
+
+END edit_controller_admin_method
+
+BEGIN new_controller_admin_method
+    
+    /**
+     * New {entity}
+     * @access public
+     * @return void
+     */
+    public function newAction()
+    {
+        $this->_forward('edit');
+    }
+    
+END new_controller_admin_method
+
+BEGIN save_controller_admin_method
+    
+    /**
+     * Save {entity}
+     * @access public
+     * @return void
+     */
+    public function saveAction()
+    {
+        // Object
+        $id     = $this->getRequest()->getParam('id', false);
+        $object = Mage::getModel('{entity_mage_identifier}')->load($id);
+
+        // Save it
+        try {
+            $object->addData($this->getRequest()->getPost());
+            $object->save();
+        } catch (Mage_Core_Exception $e) {
+            $this->_getSession()->addError($this->__('An error occurred.'));
+            $this->_redirectReferer();
+            return;
+        }
+
+        // Success
+        $this->_getSession()->addSuccess($this->__('{Entity} saved successfully.'));
+        $this->_redirect('*/*/index');
+    }
+
+END save_controller_admin_method
+
+BEGIN delete_controller_admin_method
+    
+    /**
+     * Delete {entity}
+     * @access public
+     * @return void
+     */
+    public function deleteAction()
+    {
+        // Object
+        $id     = $this->getRequest()->getParam('id', false);
+        $object = Mage::getModel('{entity_mage_identifier}')->load($id);
+
+        // No object?
+        if (!$object->getId()) {
+            $this->_getSession()->addError($this->__('{Entity} not found.'));
+            $this->_redirectReferer();
+            return;
+        }
+
+        // Delete it
+        try {
+            $object->delete();
+        } catch (Mage_Core_Exception $e) {
+            $this->_getSession()->addError($this->__('An error occurred.'));
+            $this->_redirectReferer();
+            return;
+        }
+
+        // Success
+        $this->_getSession()->addSuccess($this->__('{Entity} deleted successfully.'));
+        $this->_redirect('*/*/index');
+    }
+    
+END delete_controller_admin_method
+
 BEGIN grid_controller_methods
     /**
      * Pre dispatch
@@ -3957,9 +4222,11 @@ BEGIN tabs_controller_methods
         $this->_getSession()->addSuccess($this->__('{Entity} deleted successfully.'));
         $this->_redirect('*/*/index');
     }
+    
 END tabs_controller_methods
 
 BEGIN form_controller_methods
+    
     /**
      * New {entity}
      * @access public
